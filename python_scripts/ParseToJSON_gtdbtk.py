@@ -25,7 +25,7 @@ for line in range(0,gtdb_data.shape[0]):
 
     gtdb_json=json.dumps(gtdb_dict, default=np_encoder)
     
-    jsonFile = "./taxonomy/" + gtdb_data.user_genome[line].split('.')[0] + ".gtdb.json"
+    jsonFile = gtdb_data.user_genome[line][3:7] + "/" + gtdb_data.user_genome[line].split('.')[0] + ".gtdb.json"
     os.makedirs(os.path.dirname(jsonFile), exist_ok=True)
     with open(jsonFile, "w") as file:
         file.write(gtdb_json)
