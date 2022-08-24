@@ -3,18 +3,21 @@ nextflow.enable.dsl=2
 process taxonomy {
     
     tag "${batch}" 
-    conda "/homes/lfenske/miniconda3/envs/gtdbtk-2.1.1" 
+    conda "/homes/lfenske/miniconda3/envs/gtdbtk-2.1.1" //!!! export GTDBTK_DATA_PATH=/vol/bakrep/database/gtdb/release207v2/ !!!
     errorStrategy { task.exitStatus in 104..143 ? 'retry' : 'ignore' } 
     maxRetries 4
-    cpus 4
-    memory { 55.GB * task.attempt }
+    cpus 8
+    memory { 55.GB * task.attempt } // GTDBtk braucht laut Doku etwa 55GB --> vielleicht reicht für jeweils 1 Genom auch weniger
     
     input:
+        //path genome_dir // Wenn man nur einen Ordner übergeben will
         tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
         
     output:
         path("${sample}.bac120.summary.tsv") 
         //publishDir pattern: "${sample}.bac120.summary.tsv", path: "gtdbtk/${batch}", mode: 'copy'  
+        //file("*.log")
+        //publishDir "./gtdbtk_logs/${batch}/", saveAs: { filename -> "${sample}.gtdbtk.log" }, mode: 'copy'
         
     script:
     """
@@ -27,19 +30,16 @@ process taxonomy {
 process taxonomyToJson {
     
     input:
-        path("661k.bac120.summary.tsv")
-        //tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
+        tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
+        path("gtdbtk/${batch}/${sample}.bac120.summary.tsv")
         
     output:
-        file("${sample}.gtdb.json")
-        publishDir path: "./taxonomy", mode: 'copy', pattern: "${sample}.gtdb.json" 
+        file(".gtdbtk.json")
+        publishDir "./taxonomy/${batch}/", saveAs: { filename -> "${sample}.gtdbtk.json" }, mode: 'copy'
       
       script:
           """
-          for tsv in *.bac120.summary.tsv 
-          do 
-              python3 /vol/bakrep/linda_test/scripts/ParseToJSON_gtdbtk.py -i \$tsv 
-          done
+              python3 /vol/bakrep/linda_test/scripts/ParseToJSON_gtdbtk.py -i gtdbtk/${batch}/${sample}.bac120.summary.tsv
           """
 
 }
@@ -50,15 +50,16 @@ process qualityCheck {
     conda "/homes/lfenske/miniconda3/envs/checkm"
     errorStrategy 'retry'
     maxRetries 4
-    cpus 4
-    memory { 40.GB * task.attempt }
+    cpus 8
+    memory { 40.GB * task.attempt } // checkm braucht laut Doku ca. 40 GB
     
     input:
+        //path genome_dir
         tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
         
     output:
-        path("${sample}_results.tsv")
-        publishDir pattern: "${sample}_results.tsv", path: "checkm/${batch}/", mode: 'copy'
+        path("${sample}_results.tsv") // richtig benennen! Damit nicht immer überschrieben wird.
+        //publishDir pattern: "${sample}_results.tsv", path: "checkm/${batch}/", mode: 'copy'
 
     script:
     """
@@ -71,19 +72,16 @@ process qualityCheck {
 process qcToJson {
     
     input:
-        path("*_results.tsv")
-        //tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
+        tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
+        path("checkm/${batch}/${sample}_results.tsv")
        
     output:
-        file("*.checkm.json")  
-        publishDir "./quality_control/", mode: 'copy', pattern: "*.checkm.json"  
+        file(".checkm.json") 
+        publishDir "./quality_control/${batch}/", saveAs: { filename -> "${sample}.checkm.json" }, mode: 'copy'
       
       script:
           """
-          for tsv in ./checkm/*/*.tsv
-          do 
-              python3 /vol/bakrep/linda_test/scripts/ParseToJSON_checkm.py -i \$tsv -o ./ 
-          done
+          python3 /vol/bakrep/linda_test/scripts/ParseToJSON_checkm.py -i checkm/${batch}/${sample}_results.tsv
           """
 
 }
@@ -113,9 +111,10 @@ process annotation {
 
 workflow {
     
+    // der eingegebene Pfad-String wird hier in einen korrekten Pfad umgewandelt.
     def dataPath = null
     if(params.data != null) {
-        dataPath = Path.of(params.data).toAbsolutePath()
+        dataPath = Path.of(params.data).toAbsolutePath() //Paths.get ist die ältere Variante und klappt deshalb vermutlich nicht...
         print("Data: ${dataPath}")
     } else {
         println('Data directory is null! Please provide the Data directory path via --data')
@@ -133,11 +132,16 @@ workflow {
         return [sample, genus, species, strain, batch, assemblyPath]
     } )
     //.view()
+    
+    
+    //params.genome_dir = "/vol/bakrep/linda_test/no_backup/nextflow/" // Für die Übergabe von einem einzelnen Ordner.
+    //genome_dir = Channel.fromPath(params.genome_dir)
+ 
      
     taxonomy(samples)
     qualityCheck(samples)
     annotation(samples)
-    taxonomyToJson(taxonomy.out)
-    qcToJson(qualityCheck.out)
+    taxonomyToJson(samples, taxonomy.out)
+    qcToJson(samples, qualityCheck.out)
     
 }
