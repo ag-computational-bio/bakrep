@@ -4,10 +4,12 @@ process taxonomy {
     
 	tag "${batch}" 
 	conda "gtdbtk=2.1.1"
-	errorStrategy { task.exitStatus in 104..143 ? 'retry' : 'ignore' } //Tries to ignore the error if GTDBtk cannot find marker genes.
+	errorStrategy { task.exitStatus in 104..143 ? 'retry' : 'ignore' } 
+	//Tries to ignore the error if GTDBtk cannot find marker genes.
+	//errorStrategy 'retry'
 	maxRetries 3
-	cpus 8
-	memory { 55.GB * task.attempt }
+	cpus 1
+	memory { 100.GB * task.attempt }
     
 	input:
 		tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
@@ -33,8 +35,8 @@ process qualityCheck {
 	conda "checkm-genome=1.2.1"
 	errorStrategy 'retry'
 	maxRetries 3
-	cpus 8
-	memory { 40.GB * task.attempt }
+	cpus 1
+	memory { 80.GB * task.attempt }
     
 	input:
 		tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
@@ -47,7 +49,7 @@ process qualityCheck {
 		"""
 		mkdir ./tmp_checkm
 		cp ${assemblyPath} ./tmp_checkm
-		checkm lineage_wf ./temp_checkm checkm/ -x .gz --tab_table --file "${sample}_results.tsv"
+		checkm lineage_wf ./tmp_checkm checkm/ -x .gz --tab_table --file "${sample}_results.tsv"
 		ParseToJSON_checkm.py -i "${sample}_results.tsv"
 		"""    
 }
@@ -55,10 +57,10 @@ process qualityCheck {
 process annotation {
 
 	tag "${batch}"
-	conda "bakta=1.4.2"
+	conda "bakta=1.5.0"
 	errorStrategy 'retry'
 	maxRetries 3
-	cpus 8
+	cpus 4
 	memory { 16.GB * task.attempt }
    
 	input:
@@ -66,7 +68,7 @@ process annotation {
 
 	output:
 		tuple path("${sample}.json"), path("${sample}.gff3"), path("${sample}.gbff"), path("${sample}.ffn"), path("${sample}.faa")
-		publishDir "./annotation/${batch}", pattern: "${sample}.{json,gff,gbff,ffn,faa}", saveAs: { "${sample}.bakta.${file(it).extension()}" }, mode: 'copy'
+		publishDir "./annotation/${batch}", pattern: "${sample}.{json,gff,gbff,ffn,faa}", saveAs: { "${sample}.bakta.${file(it).extension }" }, mode: 'copy'
 
 	script:
 		"""
