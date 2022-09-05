@@ -10,15 +10,15 @@ parser.add_argument("-i", dest="input", default="metadata_661k_filtered.tsv", ty
 parser.add_argument("-o", dest="output", default="/vol/bakrep/assemblies1/", type=str, help="Path to output directory (default: /vol/bakrep/asseblies1/)")
 args=parser.parse_args()
 
-# Liest gefilterte Metadata-Datei ein, und nimmt sich daraus die Sample-ID
+# Takes sampleID from metadata file
 meta_id=pd.read_csv(args.input,sep='\t', usecols=["sample_id"])
 filenames = []
 dicnames = {'Dict' : ["test"], 'Amount' : [0]}
 dic_df = pd.DataFrame(dicnames)
 files = []
 
-# Es wird eine Liste erstellt in der alle IDs gesammelt werden. Vor jeder ID werden anschließend nur die Zeichen 4-6 in einer weiteren Liste gesammelt.
-# Wenn noch kein Ordner mit dieser Zeichenkombination existiert, wird einer erstellt. Die Dateien, die zum Schema passen werden dann in den passenden Ordner kopiert.
+# A list is created in which all IDs are collected. Before each ID then only the characters 4-6 are collected in another list.
+# If no folder with this character combination exists yet, one is created. The files, which fit to the scheme are copied then into the suitable folder.
 for line in range(0,meta_id.shape[0]):
     helpls = meta_id.sample_id[line]
     helpls_part = helpls[3:7]

@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 import json
 from logging import root
 import sys
@@ -27,13 +29,11 @@ for line in range(0,gtdb_data.shape[0]):
             classDict.update([(SpecList2[item], classList[item].split("__")[1])])
     gtdb_dict={"classification": classDict, "fastani_reference": gtdb_data.fastani_reference[line], 
                           "classification_method": gtdb_data.classification_method[line],"warnings": json.dumps(gtdb_data.warnings[line])}
-	
-    # .dumps hier nötig, damit der Text in den "warnings" auch wirklich als Text interpretiert werden kann!
 
     gtdb_json=json.dumps(gtdb_dict, default=np_encoder)
     
     #jsonFile = gtdb_data.user_genome[line][3:7] + "/" + gtdb_data.user_genome[line].split('.')[0] + ".gtdb.json"
-    jsonFile = ".gtdbtk.json"
+    jsonFile = "gtdbtk.json"
     #os.makedirs(os.path.dirname(jsonFile), exist_ok=True)
     with open(jsonFile, "w") as file:
         file.write(gtdb_json)

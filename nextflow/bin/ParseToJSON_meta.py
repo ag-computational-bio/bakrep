@@ -29,7 +29,7 @@ os.makedirs(os.path.dirname(jsonFile), exist_ok=True)
 with open(jsonFile, "w") as file:
         json.dump(meta_json, file)
         
-# Funktioniert und erstellt für jede ID eine Datei    
+# Creates one file for each ID   
 #    jsonFile = "./assembly_json/" + meta_data.sample_id[line] + ".checkm.json"
 #    os.makedirs(os.path.dirname(jsonFile), exist_ok=True)
 #    with open(jsonFile, "w") as file:

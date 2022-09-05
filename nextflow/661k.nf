@@ -15,9 +15,8 @@ process taxonomy {
 		tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
         
 	output:
-		tuple path(".gtdbtk.json"), path("gtdbtk.log")
-		publishDir "./taxonomy/${batch}/", saveAs: { filename -> "${sample}.gtdbtk.json" }, mode: 'copy'
-		publishDir "./taxonomy/${batch}/", pattern: "gtdbtk.log", saveAs: { "${sample}.gtdbtk.log"}, mode: 'copy'
+		path("gtdbtk.json")
+		publishDir "./taxonomy/${batch}/",pattern: "gtdbtk.json", saveAs: { "${sample}.gtdbtk.json" }, mode: 'copy'
         
 	script:
 		"""

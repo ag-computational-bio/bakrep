@@ -4,21 +4,21 @@ import numpy as numpy
 from argparse import ArgumentParser
 
 parser = ArgumentParser(description="Filtert metadata_ena_661K.txt nach passenden Spalten.")
-parser.add_argument("-i", dest="input", default="metadata_ena_661K.txt", type=str, help="Name der Inputdatei (Default: metadata_ena_661K.txt)")
-parser.add_argument("-o", dest="output", default="metadata_filtered.tsv", type=str, help="Name der Outputdatei (Default: metadata_filtered.tsv)")
+parser.add_argument("-i", dest="input", default="metadata_ena_661K.txt", type=str, help="name of the input file (default: metadata_ena_661K.txt)")
+parser.add_argument("-o", dest="output", default="metadata_filtered.tsv", type=str, help="name of the output file (default: metadata_filtered.tsv)")
 args=parser.parse_args()
 
 
-#Einlesen des csv-Datei; 'usecols' sorgt dafür, dass nur diese spezifischen Spalten eingelesen werden (Name muss stimmen!);
-#'na_filter' sorgt dafür, dass leere Zeilen nicht mit NA gefüllt werden, sondern wirklich leer sind
-# Spalte 'scientific_name' wird in 'genus' umbenannt und Spalte für 'species' wird eingefügt.
+#reading the csv file; 'usecols' makes sure that only these specific columns are read in (name must be correct!);
+#'na_filter' makes sure that empty rows are not filled with NA, but are really empty
+# column 'scientific_name' is renamed to 'genus' and column for 'species' is inserted.
 data_meta=pd.read_csv(args.input,sep='\t', usecols=["sample_id","scientific_name","strain","sub_strain","study_accession","run_accession","experiment_accession","first_public","project_name","study_title","country","collection_date","environment_biome","location"], na_filter=False)
 data_meta.insert(11, "species", "unknown")
 data_meta.rename(columns={"scientific_name": "genus"}, inplace=True)
 
-#Geht durch alle Spalten und setzt 'genus' und/oder 'species' auf 'unknown', falls nichts eingetragen sein sollte.
-#Ist ein Eintrag in 'genus' vorhanden, wird dieser am Leerzeichen gesplitet und der zweite Teil wird als 'species' eingetragen.
-#Ist nur ein string eingetragen, wird dieser als 'genus' gesetzt und 'species' auf 'unknown'.
+#Goes through all columns and sets 'genus' and/or 'species' to 'unknown' if nothing is entered.
+#If there is an entry in 'genus', it will be split at whitespace and the second part will be entered as 'species'.
+#If only one string is entered, it will be set as 'genus' and 'species' will be set to 'unknown'.
 for line in range(0,data_meta.shape[0]):
     if data_meta.genus[line] == "":
         data_meta.genus[line] = "unknown"
@@ -31,7 +31,7 @@ for line in range(0,data_meta.shape[0]):
         data_meta.species[line] = data_meta.genus[line].split(' ')[1] 
         data_meta.genus[line] = data_meta.genus[line].split(' ')[0]
              
-#Wenn in 'strain' kein Eintrag vorhanden ist, wird geschaut ob in 'sub_strain' ein Eintrag ist, ansonsten wird 'strain' auf 'unknown' gesetzt. 
+#If there is no entry in 'strain', it is checked if there is an entry in 'sub_strain', otherwise 'strain' is set to 'unknown'. 
     if data_meta.strain[line] == "":
         if data_meta.sub_strain[line] != "":
             data_meta.strain[line] = data_meta.sub_strain[line]
@@ -55,7 +55,6 @@ for line in range(0,data_meta.shape[0]):
     if(len(data_meta.strain[line]) >= 20):
         print(data_meta.strain[line])  
  
-#Die Spalte 'sub_strain' wird zum Schluss nicht mehr benötigt und deshalb gelöscht.
 data_meta.drop(columns="sub_strain", inplace=True) 
 data_meta = data_meta.reindex(columns=['sample_id','genus','species','strain','study_accession','run_accession','experiment_accession','project_name','study_title','first_public','collection_date','country','environment_biome','location'])
 data_meta.to_csv(args.output,sep='\t',index=0)
