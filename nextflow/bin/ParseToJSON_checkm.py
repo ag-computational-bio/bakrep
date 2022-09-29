@@ -29,7 +29,7 @@ for line in range(0,checkm_data.shape[0]):
     checkm_json=json.dumps(checkm_dict, default=np_encoder)
 
     #jsonFile = checkm_data.BinID[line][3:7] + "/" + checkm_data.BinID[line].split('.')[0] + ".checkm.json"
-    jsonFile = ".checkm.json"
+    jsonFile = "checkm.json"
     #os.makedirs(os.path.dirname(jsonFile), exist_ok=True)
     with open(jsonFile, "w") as file:
         file.write(checkm_json)

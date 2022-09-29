@@ -2,13 +2,12 @@ nextflow.enable.dsl=2
 
 process taxonomy {
     
-	tag "${batch}" 
-	conda "gtdbtk=2.1.1"
-	errorStrategy { task.exitStatus in 104..143 ? 'retry' : 'ignore' } 
-	//Tries to ignore the error if GTDBtk cannot find marker genes.
-	//errorStrategy 'retry'
-	maxRetries 3
-	cpus 1
+	tag "${sample}" 
+	//conda "gtdbtk=2.1.1"
+	conda "/homes/lfenske/miniconda3/envs/gtdbtk_test/"
+	errorStrategy { task.exitStatus in 104..143 ? 'retry' : 'ignore' } //Tries to ignore the error if GTDBtk cannot find marker genes.
+	maxRetries 1
+	cpus 4
 	memory { 100.GB * task.attempt }
     
 	input:
@@ -30,18 +29,18 @@ process taxonomy {
 
 process qualityCheck {
 
-	tag "${batch}"    
+	tag "${sample}"    
 	conda "checkm-genome=1.2.1"
 	errorStrategy 'retry'
 	maxRetries 3
-	cpus 1
+	cpus 4
 	memory { 80.GB * task.attempt }
     
 	input:
 		tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
 
 	output:
-		file(".checkm.json") 
+		path("checkm.json") 
 		publishDir "./quality_control/${batch}/", saveAs: { filename -> "${sample}.checkm.json" }, mode: 'copy'
 
 	script:
@@ -53,10 +52,35 @@ process qualityCheck {
 		"""    
 }
 
+process qualityCheck2 {
+
+	tag "${sample}"
+	conda "/homes/lfenske/miniconda3/envs/checkm2/"
+	errorStrategy 'retry'
+	maxRetries 3
+	cpus 4
+	memory  { 60.GB * task.attempt }
+	
+	input:
+		tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
+		
+	output:
+		path("checkm2.json")
+		publishDir "./quality_control2/${batch}/", saveAs: { filename -> "${sample}.checkm2.json" }, mode: 'copy'
+		
+	script:
+		"""
+		mkdir ./tmp_checkm2
+		cp ${assemblyPath} ./tmp_checkm2
+		/vol/bakrep/database/checkm2/bin/checkm2 predict --input ./tmp_checkm2 --output-directory ./checkm2 -x .gz
+		ParseToJSON_checkm2.py -i "./checkm2/quality_report.tsv"
+		"""
+}
+
 process annotation {
 
-	tag "${batch}"
-	conda "bakta=1.5.0"
+	tag "${sample}"
+	conda "bakta=1.5.1"
 	errorStrategy 'retry'
 	maxRetries 3
 	cpus 4
@@ -76,7 +100,6 @@ process annotation {
 }
 
 workflow {
-
 	def dataPath = null
 	if(params.data != null) {
 		dataPath = Path.of(params.data).toAbsolutePath()
@@ -100,6 +123,7 @@ workflow {
          
 	taxonomy(samples)
 	qualityCheck(samples)
+	qualityCheck2(samples)
 	annotation(samples)
    
 // Parameters to pass: --samples; --data; --baktadb;   
