@@ -100,6 +100,18 @@ process annotation {
 }
 
 workflow {
+	params.baktadb = "/vol/software/share/baktadb"
+	params.data = "/vol/bakrep/assemblies"
+	
+	log.info """\
+	         B A K R E P
+	===================================
+	samples   :   ${params.samples}
+	data      :   s${params.data}
+	baktadb   :   ${params.baktadb}
+	"""
+	.stripIndent()
+	
 	def dataPath = null
 	if(params.data != null) {
 		dataPath = Path.of(params.data).toAbsolutePath()
@@ -125,6 +137,5 @@ workflow {
 	qualityCheck(samples)
 	qualityCheck2(samples)
 	annotation(samples)
-   
-// Parameters to pass: --samples; --data; --baktadb;   
+     
 }
