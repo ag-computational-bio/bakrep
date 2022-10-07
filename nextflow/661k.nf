@@ -1,8 +1,8 @@
 nextflow.enable.dsl=2
 
-*/
-	Runs GTDBtk taxonomic classification.
 /*
+	Runs GTDBtk taxonomic classification.
+*/
 
 process taxonomy {
     
@@ -18,22 +18,23 @@ process taxonomy {
 		tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
         
 	output:
-		path("gtdbtk.json")
-		publishDir "./taxonomy/${batch}/",pattern: "gtdbtk.json", saveAs: { "${sample}.gtdbtk.json" }, mode: 'copy'
+		path("gtdbtk.zip")
+		publishDir "./taxonomy/${batch}/",pattern: "gtdbtk.zip", saveAs: { "${sample}.gtdbtk.zip" }, mode: 'copy'
         
 	script:
 		"""
-		export GTDBTK_DATA_PATH=$gtdb
+		export GTDBTK_DATA_PATH="${params.gtdb}"
 		mkdir ./tmp_gtdbtk
 		cp ${assemblyPath} ./tmp_gtdbtk
 		gtdbtk classify_wf --genome_dir ./tmp_gtdbtk --out_dir "./" --prefix "${sample}" --extension gz --cpus $task.cpus
 		ParseToJSON_gtdbtk.py -i "${sample}.bac120.summary.tsv"
+		zip "gtdbtk.zip" "gtdbtk.json"
 		"""
 }
 
-*/
-Runs checkm for assessing the quality of the genomes.
 /*
+	Runs checkm for assessing the quality of the genomes.
+*/
 
 process qualityCheck {
 
@@ -60,10 +61,10 @@ process qualityCheck {
 		"""    
 }
 
-*/
-	Runs checkm2 for assessing the quality of the genomes.
-	Checkm2 is the new version of checkm which uses a machine learning approach for quality assessement.
 /*
+	Runs checkm2 for assessing the quality of the genomes. 
+	Checkm2 is the new version of checkm which uses a machine learning approach for quality assessement.
+*/
 
 process qualityCheck2 {
 
@@ -90,9 +91,9 @@ process qualityCheck2 {
 		"""
 }
 
-*/
-	Runs Bakta for annotation.
 /*
+	Runs Bakta for annotation.
+*/
 
 process annotation {
 
@@ -117,21 +118,21 @@ process annotation {
 }
 
 workflow {
-*/
-	Defines some default parametes, can adjust via the command line when runnig the pipeline.
 /*
-	params.gtdb = "/vol/bakrep/database/gtdb/release207v2/"
+	Defines some default parametes, can adjust via the command line when runnig the pipeline.
+*/
+	params.gtdb = "/vol/bakrep/database/gtdb/release207v2"
 	params.baktadb = "/vol/software/share/baktadb"
 	params.data = "/vol/bakrep/assemblies"
 	results = Path.of(params.results).toAbsolutePath()
 	
-/* 
-   Stop the pipeline in the case the specified output_dir is not empty.
+/*
+	Stop the pipeline in the case the specified output_dir is not empty.
 */
 	if (results != null && results.list().size() != 0) {
-    println "Warning: Directory $results is not empty."	
+    println "Warning: Directory $results is not empty."
     System.exit(-1)    
-}
+	}
 	
 	log.info """\
 	         B A K R E P
@@ -143,9 +144,9 @@ workflow {
 	"""
 	.stripIndent()
 	
-*/
-	Coverts the user iput of the the data folder to an absolute path and checks if the folder really contains data.
 /*
+	Coverts the user iput of the the data folder to an absolute path and checks if the folder really contains data.
+*/
 
 	def dataPath = null
 	if(params.data != null) {
@@ -159,10 +160,10 @@ workflow {
 		System.exit(-1)
 }
 
-*/
+/*
 	Collects specific parameters from the metadata file.
 	Defines the full file path from the user input and the folder name, which is a substring of the sample id.
-/*
+*/
 
 	samples = channel.fromPath( params.samples )
 	.splitCsv( sep: '\t', skip: 1  )
@@ -178,8 +179,7 @@ workflow {
 	//.view()
          
 	taxonomy(samples)
-	qualityCheck(samples)
-	qualityCheck2(samples)
-	annotation(samples)
-     
+	//qualityCheck(samples)
+	//qualityCheck2(samples)
+	//annotation(samples)     
 }
