@@ -1,5 +1,9 @@
 nextflow.enable.dsl=2
 
+*/
+	Runs GTDBtk taxonomic classification.
+/*
+
 process taxonomy {
     
 	tag "${sample}" 
@@ -19,13 +23,17 @@ process taxonomy {
         
 	script:
 		"""
-		export GTDBTK_DATA_PATH=/vol/bakrep/database/gtdb/release207v2/
+		export GTDBTK_DATA_PATH=$gtdb
 		mkdir ./tmp_gtdbtk
 		cp ${assemblyPath} ./tmp_gtdbtk
 		gtdbtk classify_wf --genome_dir ./tmp_gtdbtk --out_dir "./" --prefix "${sample}" --extension gz --cpus $task.cpus
 		ParseToJSON_gtdbtk.py -i "${sample}.bac120.summary.tsv"
 		"""
 }
+
+*/
+Runs checkm for assessing the quality of the genomes.
+/*
 
 process qualityCheck {
 
@@ -52,6 +60,11 @@ process qualityCheck {
 		"""    
 }
 
+*/
+	Runs checkm2 for assessing the quality of the genomes.
+	Checkm2 is the new version of checkm which uses a machine learning approach for quality assessement.
+/*
+
 process qualityCheck2 {
 
 	tag "${sample}"
@@ -77,6 +90,10 @@ process qualityCheck2 {
 		"""
 }
 
+*/
+	Runs Bakta for annotation.
+/*
+
 process annotation {
 
 	tag "${sample}"
@@ -100,26 +117,53 @@ process annotation {
 }
 
 workflow {
+*/
+	Defines some default parametes, can adjust via the command line when runnig the pipeline.
+/*
+	params.gtdb = "/vol/bakrep/database/gtdb/release207v2/"
 	params.baktadb = "/vol/software/share/baktadb"
 	params.data = "/vol/bakrep/assemblies"
+	results = Path.of(params.results).toAbsolutePath()
+	
+/* 
+   Stop the pipeline in the case the specified output_dir is not empty.
+*/
+	if (results != null && results.list().size() != 0) {
+    println "Warning: Directory $results is not empty."	
+    System.exit(-1)    
+}
 	
 	log.info """\
 	         B A K R E P
 	===================================
 	samples   :   ${params.samples}
-	data      :   s${params.data}
+	data      :   ${params.data}
 	baktadb   :   ${params.baktadb}
+	gtdb      :   ${params.gtdb}
 	"""
 	.stripIndent()
 	
+*/
+	Coverts the user iput of the the data folder to an absolute path and checks if the folder really contains data.
+/*
+
 	def dataPath = null
 	if(params.data != null) {
 		dataPath = Path.of(params.data).toAbsolutePath()
-		print("Data: ${dataPath}")
+			if (dataPath.list().size() == 0) {
+				println "Warning: Directory $dataPath is empty."
+				System.exit(-1)
+				}
 	} else {
 		println('Data directory is null! Please provide the Data directory path via --data')
 		System.exit(-1)
 }
+
+*/
+	Collects specific parameters from the metadata file.
+	Defines the full file path from the user input and the folder name, which is a substring of the sample id.
+/*
+
 	samples = channel.fromPath( params.samples )
 	.splitCsv( sep: '\t', skip: 1  )
 	.map( {
