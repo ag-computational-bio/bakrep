@@ -15,6 +15,7 @@ def np_encoder(object):
 parser = ArgumentParser(description="Creates JSON file from GTDBtk results.")
 
 parser.add_argument("-i", dest="input", default="661k.bac120.summary.tsv", type=str, help="Name of the input file (default: 661k.bac120.summary.tsv).")
+parser.add_argument("-o", dest="output", default="gtdbtk.json", type=str, help="Name of the output file (default: gtdbtk.json).")
 args=parser.parse_args()
 
 SpecList = ['d','p','c','o','f','g','s']
@@ -33,7 +34,7 @@ for line in range(0,gtdb_data.shape[0]):
     gtdb_json=json.dumps(gtdb_dict, default=np_encoder)
     
     #jsonFile = gtdb_data.user_genome[line][3:7] + "/" + gtdb_data.user_genome[line].split('.')[0] + ".gtdb.json"
-    jsonFile = "gtdbtk.json"
+    jsonFile = args.output
     #os.makedirs(os.path.dirname(jsonFile), exist_ok=True)
     with open(jsonFile, "w") as file:
         file.write(gtdb_json)
