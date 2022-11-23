@@ -1,7 +1,7 @@
 nextflow.enable.dsl=2
 
 /*
-	Runs GTDBtk taxonomic classification.
+	Runs GTDBtk for taxonomic classification.
 */
 
 process taxonomy {
@@ -11,8 +11,8 @@ process taxonomy {
 	conda "/homes/lfenske/miniconda3/envs/gtdbtk_test/"
 	errorStrategy { task.exitStatus in 104..143 ? 'retry' : 'ignore' } //Tries to ignore the error if GTDBtk cannot find marker genes.
 	maxRetries 3
-	cpus ( params.threads )
-	memory { 100.GB * task.attempt }
+	cpus 1
+	memory { 150.GB * task.attempt }
     
 	input:
 		tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
@@ -26,14 +26,14 @@ process taxonomy {
 		export GTDBTK_DATA_PATH="${params.gtdb}"
 		mkdir ./tmp_gtdbtk
 		cp ${assemblyPath} ./tmp_gtdbtk
-		gtdbtk classify_wf --genome_dir ./tmp_gtdbtk --out_dir "./" --prefix "${sample}" --extension gz --cpus $task.cpus
+		gtdbtk classify_wf --genome_dir ./tmp_gtdbtk --out_dir "./" --prefix "${sample}" --extension gz --cpus ${task.cpus}
 		ParseToJSON_gtdbtk.py -i "${sample}.bac120.summary.tsv" -o "${sample}.gtdbtk.json"
 		gzip "${sample}.gtdbtk.json"
 		"""
 }
 
 /*
-	Runs checkm for assessing the quality of the genomes.
+	Runs CheckM for assessing the quality of the genomes.
 */
 
 process qualityCheck {
@@ -42,8 +42,8 @@ process qualityCheck {
 	conda "checkm-genome=1.2.1"
 	errorStrategy 'retry'
 	maxRetries 3
-	cpus ( params.threads )
-	memory { 80.GB * task.attempt }
+	cpus 1
+	memory { 100.GB * task.attempt }
     
 	input:
 		tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
@@ -63,8 +63,8 @@ process qualityCheck {
 }
 
 /*
-	Runs checkm2 for assessing the quality of the genomes. 
-	Checkm2 is the new version of checkm which uses a machine learning approach for quality assessement.
+	Runs CheckM2 for assessing the quality of the genomes. 
+	CheckM2 is the new version of CheckM which uses a machine learning approach for quality assessement.
 */
 
 process qualityCheck2 {
@@ -73,8 +73,8 @@ process qualityCheck2 {
 	conda "/homes/lfenske/miniconda3/envs/checkm2/"
 	errorStrategy 'retry'
 	maxRetries 3
-	cpus ( params.threads )
-	memory  { 60.GB * task.attempt }
+	cpus 1
+	memory  { 20.GB * task.attempt }
 	
 	input:
 		tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
@@ -94,6 +94,35 @@ process qualityCheck2 {
 }
 
 /*
+Runs mlst for multilocus-sequenz-typing.
+*/
+
+process mlst {
+	
+	tag "${sample}"
+	conda "mlst=2.23.0"
+	errorStrategy 'retry'
+	maxRetries 3
+	cpus 1
+	memory { 8.GB * task.attempt }
+	
+	input:
+		tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
+	
+	output: 
+		path("${sample}.mlst.json.gz")
+		publishDir "${params.results}/mlst/${batch}/", pattern: "${sample}.mlst.json.gz", mode: 'copy'
+			 
+	script:
+		"""
+		mkdir ./tmp_mlst
+		cp ${assemblyPath} ./tmp_mlst
+		mlst --json "${sample}.mlst.json" --label "${sample}" ./tmp_mlst/*
+		gzip "${sample}.mlst.json"
+		"""
+}
+
+/*
 	Runs Bakta for annotation.
 */
 
@@ -103,7 +132,7 @@ process annotation {
 	conda "bakta=1.5.1"
 	errorStrategy 'retry'
 	maxRetries 3
-	cpus ( params.threads )
+	cpus 4
 	memory { 16.GB * task.attempt }
    
 	input:
@@ -117,9 +146,10 @@ process annotation {
 	script:
 		"""
 		bakta --db "${params.baktadb}" --prefix "${sample}.bakta" --genus "${genus}" --species "${species}" --strain "${strain}" --keep-contig-headers --threads ${task.cpus} "${assemblyPath}" 
-		gzip  "${sample}.bakta.json" "${sample}.bakta.gff3" "${sample}.bakta.gbff" "${sample}.bakta.ffn" "${sample}.bakta.faa"
+		gzip "${sample}.bakta.json" "${sample}.bakta.gff3" "${sample}.bakta.gbff" "${sample}.bakta.ffn" "${sample}.bakta.faa"
 		"""
 }
+
 
 workflow {
 /*
@@ -187,5 +217,7 @@ workflow {
 	taxonomy(samples)
 	qualityCheck(samples)
 	qualityCheck2(samples)
+	mlst(samples)
 	annotation(samples)     
 }
+
