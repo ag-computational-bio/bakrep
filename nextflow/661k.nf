@@ -8,11 +8,11 @@ process taxonomy {
     
 	tag "${sample}" 
 	//conda "gtdbtk=2.1.1"
-	conda "/homes/lfenske/miniconda3/envs/gtdbtk_test/"
-	errorStrategy { task.exitStatus in 104..143 ? 'retry' : 'ignore' } //Tries to ignore the error if GTDBtk cannot find marker genes.
-	maxRetries 3
+	conda "${params.db}/gtdbtk_test"
 	cpus 1
 	memory { 150.GB * task.attempt }
+	errorStrategy { task.exitStatus in 104..143 ? 'retry' : 'ignore' } //Tries to ignore the error if GTDBtk cannot find marker genes.
+	maxRetries 3
     
 	input:
 		tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
@@ -39,11 +39,11 @@ process taxonomy {
 process qualityCheck {
 
 	tag "${sample}"    
-	conda "checkm-genome=1.2.1"
-	errorStrategy 'retry'
-	maxRetries 3
+	conda "checkm-genome=1.2.2"
 	cpus 1
 	memory { 100.GB * task.attempt }
+	errorStrategy 'retry'
+	maxRetries 3
     
 	input:
 		tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
@@ -70,7 +70,7 @@ process qualityCheck {
 process qualityCheck2 {
 
 	tag "${sample}"
-	conda "/homes/lfenske/miniconda3/envs/checkm2/"
+	conda "${params.db}/checkm2_conda"
 	errorStrategy 'retry'
 	maxRetries 3
 	cpus 1
@@ -87,24 +87,24 @@ process qualityCheck2 {
 		"""
 		mkdir ./tmp_checkm2
 		cp ${assemblyPath} ./tmp_checkm2
-		/vol/bakrep/database/checkm2/bin/checkm2 predict --input ./tmp_checkm2 --output-directory ./checkm2 -x .gz
+		${params.checkm2db}/checkm2 predict --input ./tmp_checkm2 --output-directory ./checkm2 -x .gz
 		ParseToJSON_checkm2.py -i "./checkm2/quality_report.tsv" -o "${sample}.checkm2.json"
 		gzip "${sample}.checkm2.json"
 		"""
 }
 
 /*
-Runs mlst for multilocus-sequenz-typing.
+	Runs mlst for multilocus-sequence-typing.
 */
 
 process mlst {
 	
 	tag "${sample}"
 	conda "mlst=2.23.0"
-	errorStrategy 'retry'
-	maxRetries 3
 	cpus 1
 	memory { 8.GB * task.attempt }
+	errorStrategy 'retry'
+	maxRetries 3
 	
 	input:
 		tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
@@ -130,10 +130,10 @@ process annotation {
 
 	tag "${sample}"
 	conda "bakta=1.5.1"
-	errorStrategy 'retry'
-	maxRetries 3
 	cpus 4
 	memory { 16.GB * task.attempt }
+	errorStrategy 'retry'
+	maxRetries 3
    
 	input:
 		tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath) 
@@ -141,44 +141,46 @@ process annotation {
 	output:
 		tuple path("${sample}.bakta.json.gz"), path("${sample}.bakta.gff3.gz"), path("${sample}.bakta.gbff.gz"), path("${sample}.bakta.ffn.gz"), path("${sample}.bakta.faa.gz")
 		publishDir "${params.results}/annotation/${batch}", pattern: "${sample}.bakta.{json,gff3,gbff,ffn,faa}.gz", mode: 'copy'
-		//publishDir "${params.results}/annotation/${batch}", pattern: "${sample}.{json,gff,gbff,ffn,faa}.gz", saveAs: { "${sample}.bakta.${file(it).extension }" }, mode: 'copy'
 
 	script:
 		"""
-		bakta --db "${params.baktadb}" --prefix "${sample}.bakta" --genus "${genus}" --species "${species}" --strain "${strain}" --keep-contig-headers --threads ${task.cpus} "${assemblyPath}" 
+		bakta --db "${params.baktadb}" --prefix "${sample}.bakta" --genus "${genus}" --species "${species}" --strain "${strain}"\
+		--keep-contig-headers --threads ${task.cpus} "${assemblyPath}" 
 		gzip "${sample}.bakta.json" "${sample}.bakta.gff3" "${sample}.bakta.gbff" "${sample}.bakta.ffn" "${sample}.bakta.faa"
 		"""
 }
 
 
 workflow {
-/*
-	Defines some default parameters. These can be adjusted via the command line when runnig the pipeline.
-	The default executor is 'local'. To use the slurm cluster add the parameter '-profile slurm'.
-*/
-	params.gtdb = "/vol/bakrep/database/gtdb/release207v2"
-	params.baktadb = "/vol/software/share/bakta/db"
-	params.data = "/vol/bakrep/assemblies"
-	results = Path.of(params.results).toAbsolutePath()
+	log.info """\
+	         B A K R E P
+	===================================
+	setupdir  :   ${params.setupdir}
+	samples   :   ${params.samples}
+	data      :   ${params.data}
+	results   :   ${params.results}
+	baktadb   :   ${params.baktadb}
+	gtdb      :   ${params.gtdb}
+	checkm2db :   ${params.checkm2db}
+	"""
+	.stripIndent()
 	
 /*
-	Stop the pipeline in the case the specified output_dir is not empty.
+	Setupdir where the databases and input files are located.
 */
+	if(params.setupdir == null) {
+    println('Setup directory is null! Please provide the setup directory via --setupdir')
+    System.exit(-1)
+}
+/*
+	Option to stop the pipeline in the case the specified output_dir is not empty.
+*/
+	results = Path.of(params.results).toAbsolutePath()
+	
 	if (results != null && results.list().size() != 0) {
     println "!!! WARNING: Directory $results is not empty. Rsync will overwrite existing files. !!!"
     //System.exit(-1)    
 	}
-	
-	log.info """\
-	         B A K R E P
-	===================================
-	samples   :   ${params.samples}
-	data      :   ${params.data}
-	baktadb   :   ${params.baktadb}
-	gtdb      :   ${params.gtdb}
-	results   :   ${params.results}
-	"""
-	.stripIndent()
 	
 /*
 	Coverts the user input of the the data folder to an absolute path and checks if the folder really contains data.
