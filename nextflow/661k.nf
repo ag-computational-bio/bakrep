@@ -33,41 +33,11 @@ process taxonomy {
 }
 
 /*
-	Runs CheckM for assessing the quality of the genomes.
-*/
-
-process qualityCheck {
-
-	tag "${sample}"    
-	conda "checkm-genome=1.2.2"
-	cpus 1
-	memory { 100.GB * task.attempt }
-	errorStrategy 'retry'
-	maxRetries 3
-    
-	input:
-		tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
-
-	output:
-		path("${sample}.checkm.json.gz") 
-		publishDir "${params.results}/quality_control/${batch}/", pattern: "${sample}.checkm.json.gz", mode: 'copy'
-
-	script:
-		"""
-		mkdir ./tmp_checkm
-		cp ${assemblyPath} ./tmp_checkm
-		checkm lineage_wf ./tmp_checkm checkm/ -x .gz --tab_table --file "${sample}_results.tsv"
-		ParseToJSON_checkm.py -i "${sample}_results.tsv" -o "${sample}.checkm.json"
-		gzip "${sample}.checkm.json"
-		"""    
-}
-
-/*
 	Runs CheckM2 for assessing the quality of the genomes. 
 	CheckM2 is the new version of CheckM which uses a machine learning approach for quality assessement.
 */
 
-process qualityCheck2 {
+process qualityCheck {
 
 	tag "${sample}"
 	conda "${params.db}/checkm2_conda"
@@ -81,15 +51,38 @@ process qualityCheck2 {
 		
 	output:
 		path("${sample}.checkm2.json.gz")
-		publishDir "${params.results}/quality_control2/${batch}/", pattern: "${sample}.checkm2.json.gz", mode: 'copy'
+		publishDir "${params.results}/quality_control/${batch}/", pattern: "${sample}.checkm2.json.gz", mode: 'copy'
 		
 	script:
 		"""
-		mkdir ./tmp_checkm2
-		cp ${assemblyPath} ./tmp_checkm2
-		${params.checkm2db}/checkm2 predict --input ./tmp_checkm2 --output-directory ./checkm2 -x .gz
-		ParseToJSON_checkm2.py -i "./checkm2/quality_report.tsv" -o "${sample}.checkm2.json"
+		mkdir ./tmp_qc
+		cp ${assemblyPath} ./tmp_qc
+		${params.checkm2db}/checkm2 predict --input ./tmp_qc --output-directory ./qc -x .gz
+		ParseToJSON_checkm2.py -i "./qc/quality_report.tsv" -o "${sample}.checkm2.json"
 		gzip "${sample}.checkm2.json"
+		"""
+}
+
+process assemblyScan {
+	
+	tag "${sample}"
+	cpus 1
+	memory { 2.GB * task.attempt }
+	errorStrategy 'retry'
+	maxRetries 3
+	
+	input: tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
+	
+	output:
+		path("${sample}.assemblyscan.json.gz")
+		publishDir "${params.results}/quality_control/${batch}/", pattern: "${sample}.assemblyscan.json.gz", mode: 'copy'
+	
+	script:
+		"""
+		mkdir ./tmp_scan
+		cp ${assemblyPath} ./tmp_scan
+		assembly-scan.py ./tmp_scan/* > ${sample}.assemblyscan.json
+		gzip "${sample}.assemblyscan.json"
 		"""
 }
 
@@ -111,7 +104,7 @@ process mlst {
 	
 	output: 
 		path("${sample}.mlst.json.gz")
-		publishDir "${params.results}/mlst/${batch}/", pattern: "${sample}.mlst.json.gz", mode: 'copy'
+		publishDir "${params.results}/taxonomy/${batch}/", pattern: "${sample}.mlst.json.gz", mode: 'copy'
 			 
 	script:
 		"""
@@ -129,7 +122,7 @@ process mlst {
 process annotation {
 
 	tag "${sample}"
-	conda "bakta=1.5.1"
+	conda "bakta=1.6.0"
 	cpus 4
 	memory { 16.GB * task.attempt }
 	errorStrategy 'retry'
@@ -145,7 +138,7 @@ process annotation {
 	script:
 		"""
 		bakta --db "${params.baktadb}" --prefix "${sample}.bakta" --genus "${genus}" --species "${species}" --strain "${strain}"\
-		--keep-contig-headers --threads ${task.cpus} "${assemblyPath}" 
+		--keep-contig-headers --threads ${task.cpus} --skip-plot "${assemblyPath}" 
 		gzip "${sample}.bakta.json" "${sample}.bakta.gff3" "${sample}.bakta.gbff" "${sample}.bakta.ffn" "${sample}.bakta.faa"
 		"""
 }
@@ -218,7 +211,7 @@ workflow {
          
 	taxonomy(samples)
 	qualityCheck(samples)
-	qualityCheck2(samples)
+	assemblyScan(samples)
 	mlst(samples)
 	annotation(samples)     
 }
