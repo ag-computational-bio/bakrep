@@ -122,7 +122,7 @@ process mlst {
 process annotation {
 
 	tag "${sample}"
-	conda "bakta=1.6.0"
+	conda "bakta=1.6.1"
 	cpus 4
 	memory { 16.GB * task.attempt }
 	errorStrategy 'retry'
