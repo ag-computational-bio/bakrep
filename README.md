@@ -13,7 +13,7 @@ We want to use this resource to further work on these assemblies and additionall
 
 # :hammer_and_wrench:  Installation  
 
-The workflow is written in [Nextflow](https://www.nextflow.io/docs/latest/index.html) and all tools are installed via [Conda](https://conda.io/projects/conda/en/latest/user-guide/install/index.html).
+The workflow is written in [Nextflow](https://www.nextflow.io/docs/latest/index.html) and all tools are installed via [Conda](https://conda.io/projects/conda/en/latest/user-guide/install/index.html). Python3 is also required to create the result json files.
 
 Clone the repository:
 
@@ -21,6 +21,7 @@ Clone the repository:
 git clone https://github.com/ag-computational-bio/bakrep
 ```
 CheckM2 needs to be installed manually. Please follow the instructions at the [CheckM2 GitHub](https://github.com/chklovski/CheckM2).
+
 
 ## Running
 
