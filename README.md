@@ -20,6 +20,8 @@ Clone the repository:
 ```bash
 git clone https://github.com/ag-computational-bio/bakrep
 ```
+CheckM2 needs to be installed manually. Please follow the instructions at the [CheckM2 GitHub](https://github.com/chklovski/CheckM2).
+
 ## Running
 
 Run the nextflow-script:
