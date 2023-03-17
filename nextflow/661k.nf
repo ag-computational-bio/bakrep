@@ -7,26 +7,25 @@ nextflow.enable.dsl=2
 process taxonomy {
     
 	tag "${sample}" 
-	//conda "gtdbtk=2.1.1"
-	conda "${params.db}/gtdbtk_test"
+	conda "gtdbtk=2.2.4"
 	cpus 1
-	memory { 150.GB * task.attempt }
-	errorStrategy { task.exitStatus in 104..143 ? 'retry' : 'ignore' } //Tries to ignore the error if GTDBtk cannot find marker genes.
-	maxRetries 3
+	memory { 32.GB * task.attempt }
+	errorStrategy = { task.attempt < 5 ? 'retry' : 'ignore' }
+	maxRetries 5
     
 	input:
 		tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
         
 	output:
 		path("${sample}.gtdbtk.json.gz")
-		publishDir "${params.results}/taxonomy/${batch}/", pattern: "${sample}.gtdbtk.json.gz", mode: 'copy'
+		publishDir "${params.results}/${batch}/${sample}/", pattern: "${sample}.gtdbtk.json.gz", mode: 'copy'
         
 	script:
 		"""
 		export GTDBTK_DATA_PATH="${params.gtdb}"
 		mkdir ./tmp_gtdbtk
 		cp ${assemblyPath} ./tmp_gtdbtk
-		gtdbtk classify_wf --genome_dir ./tmp_gtdbtk --out_dir "./" --prefix "${sample}" --extension gz --cpus ${task.cpus}
+		gtdbtk classify_wf --genome_dir "./tmp_gtdbtk" --out_dir "./" --prefix "${sample}" --extension gz --pplacer_cpus 1 --mash_db "${params.db}/gtdbtk_mash/"
 		ParseToJSON_gtdbtk.py -i "${sample}.bac120.summary.tsv" -o "${sample}.gtdbtk.json"
 		gzip "${sample}.gtdbtk.json"
 		"""
@@ -40,11 +39,11 @@ process taxonomy {
 process qualityCheck {
 
 	tag "${sample}"
-	conda "${params.db}/checkm2_conda"
-	errorStrategy 'retry'
-	maxRetries 3
+	conda "checkm2=1.0.1"
 	cpus 1
 	memory  { 20.GB * task.attempt }
+    errorStrategy = { task.attempt < 5 ? 'retry' : 'ignore' }
+    maxRetries 5
 	
 	input:
 		tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
@@ -57,7 +56,7 @@ process qualityCheck {
 		"""
 		mkdir ./tmp_qc
 		cp ${assemblyPath} ./tmp_qc
-		${params.checkm2db}/checkm2 predict --input ./tmp_qc --output-directory ./qc -x .gz
+		checkm2 predict --input ./tmp_qc --output-directory ./qc -x .gz --database_path "${params.checkm2db}"
 		ParseToJSON_checkm2.py -i "./qc/quality_report.tsv" -o "${sample}.checkm2.json"
 		gzip "${sample}.checkm2.json"
 		"""
@@ -68,8 +67,8 @@ process assemblyScan {
 	tag "${sample}"
 	cpus 1
 	memory { 2.GB * task.attempt }
-	errorStrategy 'retry'
-	maxRetries 3
+	errorStrategy = { task.attempt < 5 ? 'retry' : 'ignore' }
+	maxRetries 5
 	
 	input: tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
 	
@@ -95,9 +94,9 @@ process mlst {
 	tag "${sample}"
 	conda "mlst=2.23.0"
 	cpus 1
-	memory { 8.GB * task.attempt }
-	errorStrategy 'retry'
-	maxRetries 3
+	memory { 2.GB * task.attempt }
+	errorStrategy = { task.attempt < 5 ? 'retry' : 'ignore' }
+	maxRetries 5
 	
 	input:
 		tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
@@ -122,11 +121,11 @@ process mlst {
 process annotation {
 
 	tag "${sample}"
-	conda "bakta=1.6.1"
+	conda "bakta=1.7.0"
 	cpus 4
 	memory { 16.GB * task.attempt }
-	errorStrategy 'retry'
-	maxRetries 3
+	errorStrategy = { task.attempt < 5 ? 'retry' : 'ignore' }
+	maxRetries 5
    
 	input:
 		tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath) 
