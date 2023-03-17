@@ -18,7 +18,7 @@ parser.add_argument("-i", dest="input", default="checkm2.tsv", type=str, help="N
 parser.add_argument("-o", dest="output", default="checkm2.json", type=str, help="Name of the output file (default: checkm2.json).")
 args=parser.parse_args()
 
-checkm2_data=pd.read_csv(args.input,sep='\t', names=["Name","Completeness","Contamination","Completeness_Model_Used","Translation_Table_Used","Additional_Notes"], skiprows=1)
+checkm2_data=pd.read_csv(args.input,sep='\t', usecols=["Name","Completeness","Contamination","Completeness_Model_Used","Translation_Table_Used","Additional_Notes"])
 
 for line in range(0,checkm2_data.shape[0]):
     checkm2_dict={"quality": {"completeness": checkm2_data.Completeness[line], "contamination": checkm2_data.Contamination[line]}, 
