@@ -26,8 +26,6 @@ for line in range(0,checkm2_data.shape[0]):
 
     checkm2_json=json.dumps(checkm2_dict, default=np_encoder)
 
-    #jsonFile = checkm_data.BinID[line][3:7] + "/" + checkm_data.BinID[line].split('.')[0] + ".checkm.json"
     jsonFile = args.output
-    #os.makedirs(os.path.dirname(jsonFile), exist_ok=True)
     with open(jsonFile, "w") as file:
         file.write(checkm2_json)
