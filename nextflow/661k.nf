@@ -7,7 +7,7 @@ nextflow.enable.dsl=2
 process taxonomy {
 
         tag "${sample}"
-        conda "bioconda::gtdbtk=2.2.6"
+        conda "bioconda::gtdbtk=2.4.0"
         cpus 1
         memory  { 32.GB * task.attempt }
         errorStrategy = { task.attempt < 5 ? 'retry' : 'ignore' }
@@ -25,8 +25,13 @@ process taxonomy {
                 export GTDBTK_DATA_PATH="${params.gtdb}"
                 mkdir ./tmp_gtdbtk
                 cp ${assemblyPath} ./tmp_gtdbtk
-                gtdbtk classify_wf --genome_dir "./tmp_gtdbtk" --out_dir "./" --prefix "${sample}" --extension gz --pplacer_cpus 1 --mash_db "${params.db}/gtdbtk_mash/"
+                gtdbtk classify_wf --genome_dir "./tmp_gtdbtk" --out_dir "./" --prefix "${sample}" --extension fa --pplacer_cpus 1 --mash_db "${params.db}/gtdbtk_mash/"
                 ParseToJSON_gtdbtk.py -i "${sample}.bac120.summary.tsv" -o "${sample}.gtdbtk.json"
+                
+                gtdbGenus=\$(cat "${sample}.gtdbtk.json" | jq -r '.classification.genus')
+                gtdbSpecies=\$(cat "${sample}.gtdbtk.json" | jq -r '.classification.species | split(" ")[1]')
+                echo "${sample}\t\${gtdbGenus}\t\${gtdbSpecies}"
+
                 gzip "${sample}.gtdbtk.json"
                 """
 }
@@ -39,7 +44,7 @@ process taxonomy {
 process qualityCheck {
 
         tag "${sample}"
-        conda "checkm2=1.0.1"
+        conda "checkm2=1.0.2"
         cpus 1
         memory { 20.GB * task.attempt }
         errorStrategy = { task.attempt < 5 ? 'retry' : 'ignore' }
@@ -56,7 +61,7 @@ process qualityCheck {
                 """
                 mkdir ./tmp_qc
                 cp ${assemblyPath} ./tmp_qc
-                checkm2 predict --input ./tmp_qc --output-directory ./qc -x .gz --database_path ${params.checkm2db}
+                checkm2 predict --input ./tmp_qc --output-directory ./qc -x .fa --database_path ${params.checkm2db}
                 ParseToJSON_checkm2.py -i "./qc/quality_report.tsv" -o "${sample}.checkm2.json"
                 gzip "${sample}.checkm2.json"
                 """
@@ -80,7 +85,7 @@ process assemblyScan {
                 """
                 mkdir ./tmp_scan
                 cp ${assemblyPath} ./tmp_scan
-                assembly-scan.py ./tmp_scan/* > ${sample}.assemblyscan.json
+                assembly-scan.py ./tmp_scan/* --json > ${sample}.assemblyscan.json
                 gzip "${sample}.assemblyscan.json"
                 """
 }
@@ -121,7 +126,7 @@ process mlst {
         process annotation {
 
         tag "${sample}"
-        conda "bakta=1.7.0"
+        conda "bioconda::bakta=1.9.3"
         cpus 4
         memory { 16.GB * task.attempt }
         errorStrategy = { task.attempt < 5 ? 'retry' : 'ignore' }
@@ -130,15 +135,15 @@ process mlst {
         input:
                 tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
 
-        output:
-                tuple path("${sample}.bakta.json.gz"), path("${sample}.bakta.gff3.gz"), path("${sample}.bakta.gbff.gz"), path("${sample}.bakta.ffn.gz"), path("${sample}.bakta.faa.gz")
-                publishDir "${params.results}/${batch}/${sample}/", pattern: "${sample}.bakta.{json,gff3,gbff,ffn,faa}.gz", mode: 'copy'
 
+        output:
+                path("${sample}.*")
+                publishDir "${params.results}/${batch}/${sample}/", pattern: "${sample}.bakta.*.gz", mode: 'copy'
+                
         script:
                 """
-                bakta --db "${params.baktadb}" --prefix "${sample}.bakta" --genus "${genus}" --species "${species}" --strain "${strain}"\
-                --keep-contig-headers --threads ${task.cpus} --skip-plot "${assemblyPath}"
-                gzip "${sample}.bakta.json" "${sample}.bakta.gff3" "${sample}.bakta.gbff" "${sample}.bakta.ffn" "${sample}.bakta.faa"
+                bakta --db "${params.baktadb}" --prefix "${sample}.bakta" --keep-contig-headers --threads ${task.cpus} "${assemblyPath}"
+                gzip "${sample}.bakta.*"
                 """
 }
 
@@ -203,13 +208,16 @@ workflow {
                 def species = it[2]
                 def strain = it[3]
                 def batch = sample.substring(3,7)
-                def assemblyPath = dataPath.resolve(batch).resolve("${sample}.fna.gz").toAbsolutePath()
+                def assemblyPath = dataPath.resolve(batch).resolve("${sample}.fa").toAbsolutePath()
                 return [sample, genus, species, strain, batch, assemblyPath]
         } )
 
+    
+        
         taxonomy(samples)
         qualityCheck(samples)
         assemblyScan(samples)
         mlst(samples)
         annotation(samples)
+        
 }
