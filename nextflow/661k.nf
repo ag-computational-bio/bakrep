@@ -14,7 +14,7 @@ process taxonomy {
         maxRetries 5
 
         input:
-                tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
+                tuple val(sample), val(batch), path(assemblyPath)
 
         output:
                 path("${sample}.gtdbtk.json.gz")
@@ -51,7 +51,7 @@ process qualityCheck {
         maxRetries 5
 
         input:
-                tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
+                tuple val(sample), val(batch), path(assemblyPath)
 
         output:
                 path("${sample}.checkm2.json.gz")
@@ -70,12 +70,13 @@ process qualityCheck {
 process assemblyScan {
 
         tag "${sample}"
+        conda "assembly-scan"
         cpus 1
         memory { 2.GB * task.attempt }
         errorStrategy = { task.attempt < 5 ? 'retry' : 'ignore' }
         maxRetries 5
 
-        input: tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
+        input: tuple val(sample), val(batch), path(assemblyPath)
 
         output:
                 path("${sample}.assemblyscan.json.gz")
@@ -85,7 +86,7 @@ process assemblyScan {
                 """
                 mkdir ./tmp_scan
                 cp ${assemblyPath} ./tmp_scan
-                assembly-scan.py ./tmp_scan/* --json > ${sample}.assemblyscan.json
+                assembly-scan ./tmp_scan/* --json > ${sample}.assemblyscan.json
                 gzip "${sample}.assemblyscan.json"
                 """
 }
@@ -104,7 +105,7 @@ process mlst {
         maxRetries 5
 
         input:
-                tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
+                tuple val(sample), val(batch), path(assemblyPath)
 
         output:
                 path("${sample}.mlst.json.gz")
@@ -123,7 +124,7 @@ process mlst {
         Runs Bakta for annotation.
 */
 
-        process annotation {
+process annotation {
 
         tag "${sample}"
         conda "bioconda::bakta=1.9.3"
@@ -133,7 +134,7 @@ process mlst {
         maxRetries 5
 
         input:
-                tuple val(sample), val(genus), val(species), val(strain), val(batch), path(assemblyPath)
+                tuple val(sample), val(batch), path(assemblyPath)
 
 
         output:
@@ -143,7 +144,7 @@ process mlst {
         script:
                 """
                 bakta --db "${params.baktadb}" --prefix "${sample}.bakta" --keep-contig-headers --threads ${task.cpus} "${assemblyPath}"
-                gzip "${sample}.bakta.*"
+                gzip "${sample}.bakta.tsv" "${sample}.bakta.gff3" "${sample}.bakta.gbff" "${sample}.bakta.embl" "${sample}.bakta.fna" "${sample}.bakta.ffn" "${sample}.bakta.faa" "${sample}.bakta.hypotheticals.tsv" "${sample}.bakta.hypotheticals.faa" "${sample}.bakta.json" "${sample}.bakta.txt" "${sample}.bakta.png" "${sample}.bakta.svg"    
                 """
 }
 
@@ -175,7 +176,7 @@ workflow {
         results = Path.of(params.results).toAbsolutePath()
 
         if (results != null && results.list().size() != 0) {
-    println "!!! WARNING: Directory $results is not empty. Rsync will overwrite existing files. !!!"
+    println "!!! WARNING: Directory $results is not empty. Existing files will be overwritten. !!!"
     //System.exit(-1)
         }
 
@@ -204,12 +205,9 @@ workflow {
         .splitCsv( sep: '\t', skip: 1  )
         .map( {
                 def sample = it[0]
-                def genus = it[1]
-                def species = it[2]
-                def strain = it[3]
                 def batch = sample.substring(3,7)
                 def assemblyPath = dataPath.resolve(batch).resolve("${sample}.fa").toAbsolutePath()
-                return [sample, genus, species, strain, batch, assemblyPath]
+                return [sample,batch,assemblyPath]
         } )
 
     
@@ -220,4 +218,3 @@ workflow {
         mlst(samples)
         annotation(samples)
         
-}
