@@ -47,7 +47,7 @@ All optional parameters:
 
 # :page_facing_up: Citation
 
->Fenske L, Jelonek L, Goesmann A, Schwengers O. BakRep – A searchable large-scale web repository for bacterial genomes, characterizations and metadata. bioRxiv 2024 June 2, doi: 10.1101/2024.05.28.596065
+>Fenske L, Jelonek L, Goesmann A, Schwengers O. BakRep - a searchable large-scale web repository for bacterial genomes, characterizations and metadata. Microb Genom. 2024 Oct;10(10):001305. doi: 10.1099/mgen.0.001305. PMID: 39475723; PMCID: PMC11524574.
 
 >Blackwell GA, Hunt M, Malone KM, Lima L, Horesh G, Alako BTF, Thomson NR, Iqbal Z. Exploring bacterial diversity via a curated and searchable snapshot of >archived DNA sequences. PLoS Biol. 2021 Nov 9;19(11):e3001421. doi: 10.1371/journal.pbio.3001421. PMID: 34752446; PMCID: PMC8577725.
 
