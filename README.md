@@ -5,6 +5,8 @@
 
 BakRep is a searchable large-scale web repository for bacterial genomes enriched with standardized genome characterizations and related metadata. Researchers can query this repository via a flexible search engine thus combining genomic information and metadata. We gratefully acknowledge the initial assembly of all genomes, which was conducted by _Blackwell et al._ in 2021.
 
+The web repository containing all results is available here: https://bakrep.computational.bio/
+
 # :mag: Background 
 
 Public databases are brimming with bacterial WGS data posing a genetic treasure for many different applications. However, most analyses focus on particular tiny subgroups that are hard to establish from raw sequencing data or metadata, only. To this end, BakRep (Denglish blend of Bakterien & Repository) provides access to both comprehensive standardized genome characterizations and metadata via a flexible search engine. BakRep comprises assembly QC metrics, robust taxonomic classifications, MLST typing, genome annotations and original metadata for a precious collection of bacterial genomes assembled by _Blackwell et al._.
