@@ -23,15 +23,10 @@ process taxonomy {
         script:
                 """
                 export GTDBTK_DATA_PATH="${params.gtdb}"
-                mkdir ./tmp_gtdbtk
+                mkdir -p ./tmp_gtdbtk
                 cp ${assemblyPath} ./tmp_gtdbtk
                 gtdbtk classify_wf --genome_dir "./tmp_gtdbtk" --out_dir "./" --prefix "${sample}" --extension fa --pplacer_cpus 1 --mash_db "${params.db}/gtdbtk_mash/"
                 ParseToJSON_gtdbtk.py -i "${sample}.bac120.summary.tsv" -o "${sample}.gtdbtk.json"
-                
-                gtdbGenus=\$(cat "${sample}.gtdbtk.json" | jq -r '.classification.genus')
-                gtdbSpecies=\$(cat "${sample}.gtdbtk.json" | jq -r '.classification.species | split(" ")[1]')
-                echo "${sample}\t\${gtdbGenus}\t\${gtdbSpecies}"
-
                 gzip "${sample}.gtdbtk.json"
                 """
 }
@@ -59,7 +54,7 @@ process qualityCheck {
 
         script:
                 """
-                mkdir ./tmp_qc
+                mkdir -p ./tmp_qc
                 cp ${assemblyPath} ./tmp_qc
                 checkm2 predict --input ./tmp_qc --output-directory ./qc -x .fa --database_path ${params.checkm2db}
                 ParseToJSON_checkm2.py -i "./qc/quality_report.tsv" -o "${sample}.checkm2.json"
@@ -70,7 +65,7 @@ process qualityCheck {
 process assemblyScan {
 
         tag "${sample}"
-        conda "assembly-scan"
+	conda "assembly-scan"
         cpus 1
         memory { 2.GB * task.attempt }
         errorStrategy = { task.attempt < 5 ? 'retry' : 'ignore' }
@@ -84,7 +79,7 @@ process assemblyScan {
 
         script:
                 """
-                mkdir ./tmp_scan
+                mkdir -p  ./tmp_scan
                 cp ${assemblyPath} ./tmp_scan
                 assembly-scan ./tmp_scan/* --json > ${sample}.assemblyscan.json
                 gzip "${sample}.assemblyscan.json"
@@ -113,7 +108,7 @@ process mlst {
 
         script:
                 """
-                mkdir ./tmp_mlst
+                mkdir -p ./tmp_mlst
                 cp ${assemblyPath} ./tmp_mlst
                 mlst --json "${sample}.mlst.json" --label "${sample}" ./tmp_mlst/*
                 gzip "${sample}.mlst.json"
@@ -124,10 +119,10 @@ process mlst {
         Runs Bakta for annotation.
 */
 
-process annotation {
+        process annotation {
 
         tag "${sample}"
-        conda "bioconda::bakta=1.9.3"
+        conda "bioconda::bakta=1.9.4"
         cpus 4
         memory { 16.GB * task.attempt }
         errorStrategy = { task.attempt < 5 ? 'retry' : 'ignore' }
@@ -143,8 +138,8 @@ process annotation {
                 
         script:
                 """
-                bakta --db "${params.baktadb}" --prefix "${sample}.bakta" --keep-contig-headers --threads ${task.cpus} "${assemblyPath}"
-                gzip "${sample}.bakta.tsv" "${sample}.bakta.gff3" "${sample}.bakta.gbff" "${sample}.bakta.embl" "${sample}.bakta.fna" "${sample}.bakta.ffn" "${sample}.bakta.faa" "${sample}.bakta.hypotheticals.tsv" "${sample}.bakta.hypotheticals.faa" "${sample}.bakta.json" "${sample}.bakta.txt" "${sample}.bakta.png" "${sample}.bakta.svg"    
+		bakta --db "${params.baktadb}" --prefix "${sample}.bakta" --keep-contig-headers --skip-plot --threads ${task.cpus} "${assemblyPath}"
+                gzip "${sample}.bakta.tsv" "${sample}.bakta.gff3" "${sample}.bakta.gbff" "${sample}.bakta.embl" "${sample}.bakta.fna" "${sample}.bakta.ffn" "${sample}.bakta.faa" "${sample}.bakta.hypotheticals.tsv" "${sample}.bakta.hypotheticals.faa" "${sample}.bakta.json" "${sample}.bakta.txt"  
                 """
 }
 
@@ -176,7 +171,7 @@ workflow {
         results = Path.of(params.results).toAbsolutePath()
 
         if (results != null && results.list().size() != 0) {
-    println "!!! WARNING: Directory $results is not empty. Existing files will be overwritten. !!!"
+    println "!!! WARNING: Directory $results is not empty. Rsync will overwrite existing files. !!!"
     //System.exit(-1)
         }
 
@@ -202,13 +197,14 @@ workflow {
 */
 
         samples = channel.fromPath( params.samples )
-        .splitCsv( sep: '\t', skip: 1  )
+        .splitCsv( sep: '\t', skip: 0  )
         .map( {
-                def sample = it[0]
+                def sample = it[2]
                 def batch = sample.substring(3,7)
                 def assemblyPath = dataPath.resolve(batch).resolve("${sample}.fa").toAbsolutePath()
                 return [sample,batch,assemblyPath]
         } )
+
 
     
         
@@ -218,3 +214,5 @@ workflow {
         mlst(samples)
         annotation(samples)
         
+}
+
