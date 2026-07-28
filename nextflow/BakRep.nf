@@ -1,14 +1,14 @@
 nextflow.enable.dsl=2
 
 /*
-        Runs GTDBtk for taxonomic classification.
+        Runs GTDBtk for taxonomic classification. Use classification for Bakta input.
 */
 
 process taxonomy {
 
         tag "${sample}"
-        conda "bioconda::gtdbtk=2.4.0"
-        cpus 1
+        conda "bioconda::gtdbtk=2.7.2"
+        cpus 2
         memory  { 32.GB * task.attempt }
         errorStrategy = { task.attempt < 5 ? 'retry' : 'ignore' }
         maxRetries 5
@@ -17,16 +17,24 @@ process taxonomy {
                 tuple val(sample), val(batch), path(assemblyPath)
 
         output:
+                env(gtdbGenus), emit: gtdbGenus
+                env(gtdbSpecies), emit: gtdbSpecies
                 path("${sample}.gtdbtk.json.gz")
                 publishDir "${params.results}/${batch}/${sample}/", pattern: "${sample}.gtdbtk.json.gz", mode: 'copy'
+                stdout()
 
         script:
                 """
                 export GTDBTK_DATA_PATH="${params.gtdb}"
-                mkdir -p ./tmp_gtdbtk
+                mkdir ./tmp_gtdbtk
                 cp ${assemblyPath} ./tmp_gtdbtk
-                gtdbtk classify_wf --genome_dir "./tmp_gtdbtk" --out_dir "./" --prefix "${sample}" --extension fa --pplacer_cpus 1 --mash_db "${params.db}/gtdbtk_mash/"
+                gtdbtk classify_wf --genome_dir "./tmp_gtdbtk" --out_dir "./" --prefix "${sample}" --extension fa --pplacer_cpus 1
                 ParseToJSON_gtdbtk.py -i "${sample}.bac120.summary.tsv" -o "${sample}.gtdbtk.json"
+                
+                gtdbGenus=\$(cat "${sample}.gtdbtk.json" | jq -r '.classification.genus')
+                gtdbSpecies=\$(cat "${sample}.gtdbtk.json" | jq -r '.classification.species | split(" ")[1]')
+                echo "${sample}\t\${gtdbGenus}\t\${gtdbSpecies}"
+
                 gzip "${sample}.gtdbtk.json"
                 """
 }
@@ -39,7 +47,7 @@ process taxonomy {
 process qualityCheck {
 
         tag "${sample}"
-        conda "checkm2=1.0.2"
+        conda "checkm2=1.1.0"
         cpus 1
         memory { 20.GB * task.attempt }
         errorStrategy = { task.attempt < 5 ? 'retry' : 'ignore' }
@@ -65,7 +73,7 @@ process qualityCheck {
 process assemblyScan {
 
         tag "${sample}"
-	conda "assembly-scan"
+    	conda "bioconda::assembly-scan=1.0.0"
         cpus 1
         memory { 2.GB * task.attempt }
         errorStrategy = { task.attempt < 5 ? 'retry' : 'ignore' }
@@ -93,7 +101,7 @@ process assemblyScan {
 process mlst {
 
         tag "${sample}"
-        conda "mlst=2.23.0"
+        conda "bioconda::mlst=2.35.0"
         cpus 1
         memory { 2.GB * task.attempt }
         errorStrategy = { task.attempt < 5 ? 'retry' : 'ignore' }
@@ -116,13 +124,13 @@ process mlst {
 }
 
 /*
-        Runs Bakta for annotation.
+        Runs Bakta for annotation. Uses the genus and species classified by GTDB-tk as input.
 */
 
         process annotation {
 
         tag "${sample}"
-        conda "bioconda::bakta=1.9.4"
+        conda "bioconda::bakta=1.12.0 diamond=2.2.0"
         cpus 4
         memory { 16.GB * task.attempt }
         errorStrategy = { task.attempt < 5 ? 'retry' : 'ignore' }
@@ -130,18 +138,45 @@ process mlst {
 
         input:
                 tuple val(sample), val(batch), path(assemblyPath)
-
+                val(gtdbGenus)
+                val(gtdbSpecies)
 
         output:
                 path("${sample}.*")
                 publishDir "${params.results}/${batch}/${sample}/", pattern: "${sample}.bakta.*.gz", mode: 'copy'
-                
+            
         script:
                 """
-		bakta --db "${params.baktadb}" --prefix "${sample}.bakta" --keep-contig-headers --skip-plot --threads ${task.cpus} "${assemblyPath}"
-                gzip "${sample}.bakta.tsv" "${sample}.bakta.gff3" "${sample}.bakta.gbff" "${sample}.bakta.embl" "${sample}.bakta.fna" "${sample}.bakta.ffn" "${sample}.bakta.faa" "${sample}.bakta.hypotheticals.tsv" "${sample}.bakta.hypotheticals.faa" "${sample}.bakta.json" "${sample}.bakta.txt"  
+                bakta --db "${params.baktadb}" --prefix "${sample}.bakta" --genus "${gtdbGenus}" --species "${gtdbSpecies}" --keep-contig-headers --threads ${task.cpus} --skip-plot -o "./" --force "${assemblyPath}"
+                gzip ${sample}.bakta.* 
                 """
 }
+
+    process amr {
+
+    tag "${sample}"
+    conda "bioconda::ncbi-amrfinderplus=4.2.7"
+    cpus 1
+    memory { 4.GB * task.attempt }
+    errorStrategy = { task.attempt < 5 ? 'retry' : 'ignore' }
+    maxRetries 5
+
+    input:
+            tuple val(sample), val(batch), path(assemblyPath)
+            val(gtdbGenus)
+            val(gtdbSpecies)
+
+
+    output:
+            path("${sample}.*")
+            publishDir "${params.results}/${batch}/${sample}/", pattern: "${sample}.amrfinderplus.*.gz", mode: 'copy'
+
+    script:
+            """
+            amrfinder --database "${params.amrdb}" --plus --organism "${gtdbGenus}"_"${gtdbSpecies}"  -n "${assemblyPath}" -o "${sample}.amrfinderplus.tsv"
+            gzip "${sample}.amrfinderplus.tsv"
+            """
+}  
 
 
 workflow {
@@ -155,6 +190,7 @@ workflow {
         baktadb   :   ${params.baktadb}
         gtdb      :   ${params.gtdb}
         checkm2db :   ${params.checkm2db}
+        amrdb     :   ${params.amrdb}
         """
         .stripIndent()
 
@@ -197,22 +233,18 @@ workflow {
 */
 
         samples = channel.fromPath( params.samples )
-        .splitCsv( sep: '\t', skip: 0  )
+        .splitCsv( sep: '\t', skip: 1  )
         .map( {
-                def sample = it[2]
+                def sample = it[0]
                 def batch = sample.substring(3,7)
                 def assemblyPath = dataPath.resolve(batch).resolve("${sample}.fa").toAbsolutePath()
                 return [sample,batch,assemblyPath]
         } )
-
-
-    
         
         taxonomy(samples)
         qualityCheck(samples)
         assemblyScan(samples)
         mlst(samples)
-        annotation(samples)
-        
+        annotation(samples, taxonomy.out.gtdbGenus, taxonomy.out.gtdbSpecies)
+        amr(samples, taxonomy.out.gtdbGenus, taxonomy.out.gtdbSpecies)      
 }
-
