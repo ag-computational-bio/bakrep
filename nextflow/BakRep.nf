@@ -184,9 +184,20 @@ process mlst {
 
 
 workflow {
+/*
+        Git state of the pipeline for this run (commit id, "-dirty" if there are uncommitted changes).
+*/
+        def gitCmd   = { String args -> ["git", "-C", projectDir.toString()] + args.tokenize() }
+        def commitId = gitCmd("rev-parse --short HEAD").execute().text.trim() ?: 'unknown'
+        def dirty    = gitCmd("status --porcelain --untracked-files=no").execute().text.trim()
+        def gitState = dirty ? "${commitId}-dirty" : commitId
+
         log.info """\
                  B A K R E P
         ===================================
+        commit    :   ${gitState}
+        scriptId  :   ${workflow.scriptId}
+        runName   :   ${workflow.runName}
         setupdir  :   ${params.setupdir}
         samples   :   ${params.samples}
         data      :   ${params.data}
@@ -197,6 +208,21 @@ workflow {
         amrdb     :   ${params.amrdb}
         """
         .stripIndent()
+
+/*
+        Record pipeline version and command line per run in <results>/_runs/<runName>.txt
+*/
+        def runInfo = file("${params.results}/_runs/${workflow.runName}.txt")
+        runInfo.parent.mkdirs()
+        runInfo.text = """\
+            start     ${workflow.start}
+            commit    ${gitState}
+            scriptId  ${workflow.scriptId}
+            samples   ${params.samples}
+            workDir   ${workflow.workDir}
+            cmd       ${workflow.commandLine}
+            """.stripIndent()
+        if (dirty) runInfo.append("uncommitted:\n${dirty}\n")
 
 /*
         Setupdir where the databases and input files are located.
