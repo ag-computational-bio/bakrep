@@ -7,32 +7,30 @@ nextflow.enable.dsl=2
 process taxonomy {
 
         tag "${sample}"
-        conda "bioconda::gtdbtk=2.7.2"
-        cpus 2
-        memory  { 32.GB * task.attempt }
-        errorStrategy = { task.attempt < 5 ? 'retry' : 'ignore' }
+	publishDir "${params.results}/${batch}/${sample}/", pattern: "${sample}.gtdbtk.json.gz", mode: 'link'
+	conda "/shared/conda-envs/taxonomy.yaml"
+        cpus 4
+	memory  { 20.GB * task.attempt }
+        errorStrategy { task.attempt < 5 ? 'retry' : 'ignore' }
         maxRetries 5
 
-        input:
-                tuple val(sample), val(batch), path(assemblyPath)
+input:
+    tuple val(sample), val(batch), path(assemblyPath)
 
-        output:
-                env(gtdbGenus), emit: gtdbGenus
-                env(gtdbSpecies), emit: gtdbSpecies
-                path("${sample}.gtdbtk.json.gz")
-                publishDir "${params.results}/${batch}/${sample}/", pattern: "${sample}.gtdbtk.json.gz", mode: 'copy'
-                stdout()
+output:
+    tuple val(sample), val(batch), path(assemblyPath), path("${sample}.gtdbtk.json.gz"), emit: taxonomy
+
 
         script:
                 """
                 export GTDBTK_DATA_PATH="${params.gtdb}"
                 mkdir ./tmp_gtdbtk
                 cp ${assemblyPath} ./tmp_gtdbtk
-                gtdbtk classify_wf --genome_dir "./tmp_gtdbtk" --out_dir "./" --prefix "${sample}" --extension fa --pplacer_cpus 1
+                gtdbtk classify_wf --genome_dir "./tmp_gtdbtk" --out_dir "./" --prefix "${sample}" --extension fa --pplacer_cpus ${task.cpus} --cpus ${task.cpus}
                 ParseToJSON_gtdbtk.py -i "${sample}.bac120.summary.tsv" -o "${sample}.gtdbtk.json"
                 
-                gtdbGenus=\$(cat "${sample}.gtdbtk.json" | jq -r '.classification.genus')
-                gtdbSpecies=\$(cat "${sample}.gtdbtk.json" | jq -r '.classification.species | split(" ")[1]')
+                export gtdbGenus=\$(jq -r '.classification.genus' "${sample}.gtdbtk.json")
+		export gtdbSpecies=\$(jq -r '.classification.species | split(" ")[1]' "${sample}.gtdbtk.json")
                 echo "${sample}\t\${gtdbGenus}\t\${gtdbSpecies}"
 
                 gzip "${sample}.gtdbtk.json"
@@ -47,10 +45,11 @@ process taxonomy {
 process qualityCheck {
 
         tag "${sample}"
-        conda "checkm2=1.1.0"
+	publishDir "${params.results}/${batch}/${sample}/", pattern: "${sample}.checkm2.json.gz", mode: 'link'
+	conda "/shared/conda-envs/qualityCheck.yaml"
         cpus 1
-        memory { 20.GB * task.attempt }
-        errorStrategy = { task.attempt < 5 ? 'retry' : 'ignore' }
+        memory { 10.GB * task.attempt }
+        errorStrategy { task.attempt < 5 ? 'retry' : 'ignore' }
         maxRetries 5
 
         input:
@@ -58,7 +57,6 @@ process qualityCheck {
 
         output:
                 path("${sample}.checkm2.json.gz")
-                publishDir "${params.results}/${batch}/${sample}/", pattern: "${sample}.checkm2.json.gz", mode: 'copy'
 
         script:
                 """
@@ -73,17 +71,18 @@ process qualityCheck {
 process assemblyScan {
 
         tag "${sample}"
-    	conda "bioconda::assembly-scan=1.0.0"
+	publishDir "${params.results}/${batch}/${sample}/", mode: 'link'
+	conda "/shared/conda-envs/assemblyScan.yaml"
         cpus 1
-        memory { 2.GB * task.attempt }
-        errorStrategy = { task.attempt < 5 ? 'retry' : 'ignore' }
+        memory { 1.GB * task.attempt }
+        errorStrategy { task.attempt < 5 ? 'retry' : 'ignore' }
         maxRetries 5
 
-        input: tuple val(sample), val(batch), path(assemblyPath)
+        input: 
+		tuple val(sample), val(batch), path(assemblyPath)
 
         output:
                 path("${sample}.assemblyscan.json.gz")
-                publishDir "${params.results}/${batch}/${sample}/", pattern: "${sample}.assemblyscan.json.gz", mode: 'copy'
 
         script:
                 """
@@ -101,10 +100,11 @@ process assemblyScan {
 process mlst {
 
         tag "${sample}"
-        conda "bioconda::mlst=2.35.0"
+	publishDir "${params.results}/${batch}/${sample}/", pattern: "${sample}.mlst.json.gz", mode: 'link'
+	conda "/shared/conda-envs/mlst.yaml"
         cpus 1
-        memory { 2.GB * task.attempt }
-        errorStrategy = { task.attempt < 5 ? 'retry' : 'ignore' }
+        memory { 1.GB * task.attempt }
+        errorStrategy { task.attempt < 5 ? 'retry' : 'ignore' }
         maxRetries 5
 
         input:
@@ -112,7 +112,6 @@ process mlst {
 
         output:
                 path("${sample}.mlst.json.gz")
-                publishDir "${params.results}/${batch}/${sample}/", pattern: "${sample}.mlst.json.gz", mode: 'copy'
 
         script:
                 """
@@ -130,50 +129,55 @@ process mlst {
         process annotation {
 
         tag "${sample}"
-        conda "bioconda::bakta=1.12.0 diamond=2.2.0"
+	publishDir "${params.results}/${batch}/${sample}/", pattern: "${sample}.bakta.*.gz", mode: 'link'
+	conda "/shared/conda-envs/annotation.yaml"
         cpus 4
-        memory { 16.GB * task.attempt }
-        errorStrategy = { task.attempt < 5 ? 'retry' : 'ignore' }
+        memory { 14.GB * task.attempt }
+        errorStrategy { task.attempt < 5 ? 'retry' : 'ignore' }
         maxRetries 5
+//	clusterOptions '--exclude=worker-small-[1-29]'
 
         input:
-                tuple val(sample), val(batch), path(assemblyPath)
-                val(gtdbGenus)
-                val(gtdbSpecies)
+                tuple val(sample), val(batch), path(assemblyPath), path(taxonomyJson)
 
         output:
                 path("${sample}.*")
-                publishDir "${params.results}/${batch}/${sample}/", pattern: "${sample}.bakta.*.gz", mode: 'copy'
             
         script:
                 """
-                bakta --db "${params.baktadb}" --prefix "${sample}.bakta" --genus "${gtdbGenus}" --species "${gtdbSpecies}" --keep-contig-headers --threads ${task.cpus} --skip-plot -o "./" --force "${assemblyPath}"
-                gzip ${sample}.bakta.* 
+                gunzip -c "${taxonomyJson}" > taxonomy.json
+                gtdbGenus=\$(jq -r '.classification.genus // empty' taxonomy.json)
+                gtdbSpecies=\$(jq -r '(.classification.species // "") | split(" ")[1] // empty' taxonomy.json)
+                taxArgs=()
+                if [ -n "\$gtdbGenus" ]; then taxArgs+=(--genus "\$gtdbGenus"); fi
+                if [ -n "\$gtdbSpecies" ]; then taxArgs+=(--species "\$gtdbSpecies"); fi
+
+                bakta --db "${params.baktadb}" --prefix "${sample}.bakta" \${taxArgs[@]+"\${taxArgs[@]}"} --keep-contig-headers --threads ${task.cpus} --skip-plot -o "./" --force "${assemblyPath}"
+                gzip ${sample}.bakta.*
                 """
 }
 
+
     process amr {
 
-    tag "${sample}"
-    conda "bioconda::ncbi-amrfinderplus=4.2.7"
-    cpus 1
-    memory { 4.GB * task.attempt }
-    errorStrategy = { task.attempt < 5 ? 'retry' : 'ignore' }
-    maxRetries 5
+	tag "${sample}"
+	publishDir "${params.results}/${batch}/${sample}/", pattern: "${sample}.amrfinderplus.*.gz", mode: 'link'
+	conda "/shared/conda-envs/amr.yaml"
+	cpus 1
+	memory { 2.GB * task.attempt }
+	errorStrategy { task.attempt < 5 ? 'retry' : 'ignore' }
+	maxRetries 5
 
     input:
             tuple val(sample), val(batch), path(assemblyPath)
-            val(gtdbGenus)
-            val(gtdbSpecies)
 
 
     output:
             path("${sample}.*")
-            publishDir "${params.results}/${batch}/${sample}/", pattern: "${sample}.amrfinderplus.*.gz", mode: 'copy'
 
     script:
             """
-            amrfinder --database "${params.amrdb}" --plus --organism "${gtdbGenus}"_"${gtdbSpecies}"  -n "${assemblyPath}" -o "${sample}.amrfinderplus.tsv"
+            amrfinder --database "${params.amrdb}" --plus -n "${assemblyPath}" -o "${sample}.amrfinderplus.tsv"
             gzip "${sample}.amrfinderplus.tsv"
             """
 }  
@@ -197,9 +201,10 @@ workflow {
 /*
         Setupdir where the databases and input files are located.
 */
-        if(params.setupdir == null) {
-    println('Setup directory is null! Please provide the setup directory via --setupdir')
-    System.exit(-1)
+
+	if(params.setupdir == null) {
+		println('Setup directory is null! Please provide the setup directory via --setupdir')
+		System.exit(-1)
 }
 /*
         Option to stop the pipeline in the case the specified output_dir is not empty.
@@ -208,7 +213,6 @@ workflow {
 
         if (results != null && results.list().size() != 0) {
     println "!!! WARNING: Directory $results is not empty. Rsync will overwrite existing files. !!!"
-    //System.exit(-1)
         }
 
 /*
@@ -233,11 +237,11 @@ workflow {
 */
 
         samples = channel.fromPath( params.samples )
-        .splitCsv( sep: '\t', skip: 1  )
+        .splitCsv( sep: '\t', skip: 0  )
         .map( {
                 def sample = it[0]
                 def batch = sample.substring(3,7)
-                def assemblyPath = dataPath.resolve(batch).resolve("${sample}.fa").toAbsolutePath()
+                def assemblyPath = dataPath.resolve("${sample}.fa").toAbsolutePath()
                 return [sample,batch,assemblyPath]
         } )
         
@@ -245,6 +249,7 @@ workflow {
         qualityCheck(samples)
         assemblyScan(samples)
         mlst(samples)
-        annotation(samples, taxonomy.out.gtdbGenus, taxonomy.out.gtdbSpecies)
-        amr(samples, taxonomy.out.gtdbGenus, taxonomy.out.gtdbSpecies)      
+        annotation(taxonomy.out.taxonomy)
+        amr(samples)      
 }
+
