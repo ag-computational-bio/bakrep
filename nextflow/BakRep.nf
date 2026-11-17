@@ -219,6 +219,8 @@ workflow {
             commit    ${gitState}
             scriptId  ${workflow.scriptId}
             samples   ${params.samples}
+            profile   ${workflow.profile}
+            configs   ${workflow.configFiles.unique().join(' ')}
             workDir   ${workflow.workDir}
             cmd       ${workflow.commandLine}
             """.stripIndent()
