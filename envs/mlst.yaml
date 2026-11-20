@@ -1,0 +1,6 @@
+name: mlst
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - mlst=2.35.0

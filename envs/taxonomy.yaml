@@ -1,0 +1,7 @@
+name: taxonomy
+channels:
+ - conda-forge
+ - bioconda
+dependencies:
+ - gtdbtk=2.8.0
+ - jq=1.8.2
